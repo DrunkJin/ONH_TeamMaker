@@ -303,12 +303,12 @@ const TeamAuctionLive = () => {
         <div className="w-80 flex-shrink-0">
           <div className="sticky top-4">
             <div className="bg-white p-4 rounded border">
-              <h3 className="text-lg font-bold mb-4">경매 물품 현황</h3>
+              <h3 className="text-lg font-bold mb-4">경매 인원 현황</h3>
               
               {/* 전체 현황 */}
               <div className="mb-4 p-3 bg-gray-50 rounded">
-                <p>전체 물품: {gameState.totalItems}개</p>
-                <p>남은 물품: {gameState.remainingItemsCount}개</p>
+                <p>전체 경매 인원: {gameState.totalItems}개</p>
+                <p>남은 경매 인원: {gameState.remainingItemsCount}개</p>
               </div>
 
               {/* 완료된 경매 목록 */}
