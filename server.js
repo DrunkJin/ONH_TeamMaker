@@ -43,13 +43,7 @@ class GameRoom {
     // 랜덤하게 다음 경매 물품 선택
     getNextItem() {
         if (this.remainingItems.length === 0) {
-            // 실패한 아이템이 있으면 다시 남은 아이템으로 추가
-            if (this.failedItems.length > 0) {
-                this.remainingItems.push(...this.failedItems);
-                this.failedItems = [];
-            } else {
-                return null;
-            }
+            return null;
         }
         const randomIndex = Math.floor(Math.random() * this.remainingItems.length);
         const selectedItem = this.remainingItems[randomIndex];
@@ -67,9 +61,13 @@ class GameRoom {
         });
     }
 
-    // 실패한 아이템 추가
-    addFailedItem(item) {
-        this.failedItems.push(item);
+    // 실패한 아이템을 즉시 다시 경매 목록에 추가
+    addFailedItemAndReturnToPool(item) {
+        this.failedItems.push({
+            item,
+            timestamp: new Date()
+        });
+        this.remainingItems.push(item);
     }
 }
 
@@ -113,7 +111,6 @@ function finalizeAuction(game, roomId, autoFinalized) {
     winner.points -= game.currentAuction.currentBid;
     winner.team.push(game.currentAuction.playerName);
 
-    // 완료된 경매 기록 추가
     game.addCompletedItem(
         game.currentAuction.playerName,
         winner.name,
@@ -200,10 +197,12 @@ io.on('connection', (socket) => {
                     finalizeAuction(game, roomId, true);
                 } else {
                     // 실패한 경매 처리
-                    game.addFailedItem(game.currentAuction.playerName);
+                    const failedItem = game.currentAuction.playerName;
+                    game.addFailedItemAndReturnToPool(failedItem);
+                    
                     io.to(roomId).emit('auction_cancelled', {
-                        player: game.currentAuction.playerName,
-                        reason: '입찰자가 없어 경매가 취소되었습니다.'
+                        player: failedItem,
+                        reason: '입찰자가 없어 경매가 취소되었습니다. 해당 물품은 다시 경매 목록에 추가되었습니다.'
                     });
                     game.currentAuction = null;
                 }

@@ -284,6 +284,12 @@ const TeamAuctionLive = () => {
                   placeholder="입찰 금액 (10단위)"
                   value={bidAmount}
                   onChange={(e) => setBidAmount(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      placeBid();
+                    }
+                  }}
                   step="10"
                   min={gameState.currentAuction.currentBid + 10}
                 />
@@ -295,7 +301,6 @@ const TeamAuctionLive = () => {
                 </button>
               </div>
             )}
-
             {role === 'host' && (
               <button
                 className="w-full bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600"
