@@ -178,7 +178,7 @@ const TeamAuctionLive = () => {
             </div>
             <textarea
               className="w-full p-2 border rounded"
-              placeholder="경매 물품 목록 (쉼표로 구분)"
+              placeholder="경매 대상 목록 (쉼표로 구분)"
               value={auctionItems}
               onChange={(e) => setAuctionItems(e.target.value)}
               rows="3"
@@ -329,7 +329,7 @@ const TeamAuctionLive = () => {
 
               {/* 남은 경매 목록 */}
               <div className="mb-4">
-                <h4 className="font-medium text-gray-700 mb-2">남은 경매 물품</h4>
+                <h4 className="font-medium text-gray-700 mb-2">남은 경매</h4>
                 <div className="space-y-2">
                   {gameState.remainingItems.map((item, index) => (
                     <div key={`remaining-${index}`} className="p-2 bg-gray-50 rounded text-sm">
