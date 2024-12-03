@@ -200,29 +200,30 @@ const TeamAuctionLive = () => {
       </div>
     );
   }
-
+  // return 문 안의 메인 게임 화면 부분을 수정
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      {alert && (
-        <div className={`mb-4 p-4 rounded ${
-          alert.type === 'error' 
-            ? 'bg-red-100 text-red-700' 
-            : alert.type === 'success'
-            ? 'bg-green-100 text-green-700'
-            : 'bg-blue-100 text-blue-700'
-        }`}>
-          {alert.message}
+    <div className="max-w-7xl mx-auto p-4 flex gap-4">
+      {/* 메인 컨텐츠 영역 */}
+      <div className="flex-grow">
+        {alert && (
+          <div className={`mb-4 p-4 rounded ${
+            alert.type === 'error' 
+              ? 'bg-red-100 text-red-700' 
+              : alert.type === 'success'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-blue-100 text-blue-700'
+          }`}>
+            {alert.message}
+          </div>
+        )}
+
+        <div className="mb-4">
+          <h2 className="text-xl font-bold">방 코드: {roomId}</h2>
+          <p>역할: {role === 'host' ? '사회자' : '팀장'}</p>
         </div>
-      )}
 
-      <div className="mb-4">
-        <h2 className="text-xl font-bold">방 코드: {roomId}</h2>
-        <p>역할: {role === 'host' ? '사회자' : '팀장'}</p>
-      </div>
-
-      {gameState && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        {gameState && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {Object.entries(gameState.teamLeaders).map(([id, data]) => (
               <div key={id} className="p-4 border rounded">
                 <h3 className="font-bold">{data.name}의 팀</h3>
@@ -231,97 +232,99 @@ const TeamAuctionLive = () => {
               </div>
             ))}
           </div>
+        )}
 
-          <div className="mb-4">
-            <div className="bg-gray-100 p-4 rounded">
-              <h3 className="font-bold mb-2">경매 현황</h3>
-              <p>남은 물품: {gameState.remainingItemsCount} / {gameState.totalItems}</p>
+        {role === 'host' && (
+          <div className="space-y-4">
+            <button
+              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+              onClick={startAuction}
+              disabled={gameState?.currentAuction}
+            >
+              다음 경매 시작
+            </button>
+          </div>
+        )}
+
+        {gameState?.currentAuction && (
+          <div className="mt-4 p-4 border rounded space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold">
+                현재 경매: {gameState.currentAuction.playerName}
+              </h3>
+              {timeLeft !== null && (
+                <div className={`px-3 py-1 rounded ${timeLeft <= 10 ? 'bg-red-500' : 'bg-blue-500'} text-white`}>
+                  남은 시간: {timeLeft}초
+                </div>
+              )}
             </div>
             
-            {gameState.completedItems?.length > 0 && (
-              <div className="mt-4">
-                <h3 className="font-bold mb-2">경매 완료 목록</h3>
-                <div className="space-y-2">
-                  {gameState.completedItems.map((item, index) => (
-                    <div key={index} className="bg-white p-3 rounded border">
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium">{item.item}</span>
-                        <span className="text-sm text-gray-600">
-                          {item.winner} - {item.amount} 포인트
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {new Date(item.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <p className="text-lg">
+              현재 최고 입찰: {gameState.currentAuction.currentBid} 포인트
+              {gameState.currentAuction.currentBidder && (
+                ` (입찰자: ${gameState.teamLeaders[gameState.currentAuction.currentBidder]?.name})`
+              )}
+            </p>
+
+            {role === 'teamLeader' && (
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  className="flex-1 p-2 border rounded"
+                  placeholder="입찰 금액 (10단위)"
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  step="10"
+                  min={gameState.currentAuction.currentBid + 10}
+                />
+                <button
+                  className="bg-green-500 text-white px-4 rounded hover:bg-green-600"
+                  onClick={placeBid}
+                >
+                  입찰
+                </button>
               </div>
             )}
-          </div>
-        </>
-      )}
 
-      {role === 'host' && (
-        <div className="space-y-4">
-          <button
-            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-            onClick={startAuction}
-            disabled={gameState?.currentAuction}
-          >
-            다음 경매 시작
-          </button>
-        </div>
-      )}
-
-      {gameState?.currentAuction && (
-        <div className="mt-4 p-4 border rounded space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-bold">
-              현재 경매: {gameState.currentAuction.playerName}
-            </h3>
-            {timeLeft !== null && (
-              <div className={`px-3 py-1 rounded ${timeLeft <= 10 ? 'bg-red-500' : 'bg-blue-500'} text-white`}>
-                남은 시간: {timeLeft}초
-              </div>
-            )}
-          </div>
-          
-          <p className="text-lg">
-            현재 최고 입찰: {gameState.currentAuction.currentBid} 포인트
-            {gameState.currentAuction.currentBidder && (
-              ` (입찰자: ${gameState.teamLeaders[gameState.currentAuction.currentBidder]?.name})`
-            )}
-          </p>
-
-          {role === 'teamLeader' && (
-            <div className="flex gap-2">
-              <input
-                type="number"
-                className="flex-1 p-2 border rounded"
-                placeholder="입찰 금액 (10단위)"
-                value={bidAmount}
-                onChange={(e) => setBidAmount(e.target.value)}
-                step="10"
-                min={gameState.currentAuction.currentBid + 10}
-              />
+            {role === 'host' && (
               <button
-                className="bg-green-500 text-white px-4 rounded hover:bg-green-600"
-                onClick={placeBid}
+                className="w-full bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600"
+                onClick={finalizeAuction}
               >
-                입찰
+                낙찰 확정
               </button>
-            </div>
-          )}
+            )}
+          </div>
+        )}
+      </div>
 
-          {role === 'host' && (
-            <button
-              className="w-full bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600"
-              onClick={finalizeAuction}
-            >
-              낙찰 확정
-            </button>
-          )}
+      {/* 우측 사이드바 - 경매 물품 목록 */}
+      {gameState && (
+        <div className="w-80 flex-shrink-0">
+          <div className="sticky top-4">
+            <div className="bg-white p-4 rounded border">
+              <h3 className="text-lg font-bold mb-4">경매 물품 현황</h3>
+              
+              {/* 전체 현황 */}
+              <div className="mb-4 p-3 bg-gray-50 rounded">
+                <p>전체 물품: {gameState.totalItems}개</p>
+                <p>남은 물품: {gameState.remainingItemsCount}개</p>
+              </div>
+
+              {/* 완료된 경매 목록 */}
+              <div className="space-y-2">
+                <h4 className="font-medium text-gray-700">완료된 경매</h4>
+                {gameState.completedItems.map((item, index) => (
+                  <div key={index} className="p-2 bg-gray-50 rounded text-sm">
+                    <div className="font-medium">{item.item}</div>
+                    <div className="text-gray-600">
+                      {item.winner} - {item.amount} 포인트
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
