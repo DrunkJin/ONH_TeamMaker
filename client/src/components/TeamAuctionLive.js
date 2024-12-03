@@ -13,10 +13,10 @@ const TeamAuctionLive = () => {
   const [roomId, setRoomId] = useState('');
   const [gameState, setGameState] = useState(null);
   const [alert, setAlert] = useState(null);
-  const [currentPlayer, setCurrentPlayer] = useState('');
-  const [bidAmount, setBidAmount] = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
-  const [initialPoints, setInitialPoints] = useState(1000); // 초기 포인트 설정
+  const [initialPoints, setInitialPoints] = useState(1000);
+  const [auctionItems, setAuctionItems] = useState(''); // 경매 물품 목록
+  const [bidAmount, setBidAmount] = useState('');
 
   useEffect(() => {
     socket.on('room_created', ({ roomId }) => {
@@ -32,8 +32,8 @@ const TeamAuctionLive = () => {
     });
 
     socket.on('auction_started', (auction) => {
-      setAlert({ type: 'info', message: `${auction.playerName} 선수의 경매가 시작되었습니다!` });
-      setTimeLeft(30);
+      setAlert({ type: 'info', message: `${auction.playerName} 경매가 시작되었습니다!` });
+      setTimeLeft(20);
     });
 
     socket.on('bid_update', ({ amount, bidder }) => {
@@ -47,7 +47,7 @@ const TeamAuctionLive = () => {
     socket.on('auction_finalized', ({ player, winner, amount, autoFinalized }) => {
       setAlert({ 
         type: 'success', 
-        message: `${player} 선수가 ${winner}팀에 ${amount} 포인트에 ${autoFinalized ? '자동 ' : ''}낙찰되었습니다!`
+        message: `${player}이(가) ${winner}팀에 ${amount} 포인트에 ${autoFinalized ? '자동 ' : ''}낙찰되었습니다!`
       });
       setTimeLeft(null);
     });
@@ -82,8 +82,19 @@ const TeamAuctionLive = () => {
       setAlert({ type: 'error', message: '초기 포인트는 최소 100점 이상이어야 합니다.' });
       return;
     }
+    if (!auctionItems.trim()) {
+      setAlert({ type: 'error', message: '경매 물품을 입력해주세요.' });
+      return;
+    }
+    
+    const itemsList = auctionItems.split(',').map(item => item.trim()).filter(item => item);
+    if (itemsList.length === 0) {
+      setAlert({ type: 'error', message: '최소 한 개 이상의 경매 물품이 필요합니다.' });
+      return;
+    }
+
     setRole('host');
-    socket.emit('create_room', { initialPoints });
+    socket.emit('create_room', { initialPoints, items: itemsList });
   };
 
   const joinRoom = () => {
@@ -96,12 +107,7 @@ const TeamAuctionLive = () => {
   };
 
   const startAuction = () => {
-    if (!currentPlayer) {
-      setAlert({ type: 'error', message: '선수 이름을 입력해주세요.' });
-      return;
-    }
-    socket.emit('start_auction', { roomId, playerName: currentPlayer, startingBid: 0 });
-    setCurrentPlayer('');
+    socket.emit('start_auction', { roomId });
   };
 
   const placeBid = () => {
@@ -160,6 +166,13 @@ const TeamAuctionLive = () => {
               min="100"
               step="100"
             />
+            <textarea
+              className="w-full p-2 border rounded"
+              placeholder="경매 물품 목록 (쉼표로 구분)"
+              value={auctionItems}
+              onChange={(e) => setAuctionItems(e.target.value)}
+              rows="3"
+            ></textarea>
             <button
               className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
               onClick={createRoom}
@@ -208,35 +221,56 @@ const TeamAuctionLive = () => {
       </div>
 
       {gameState && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-          {Object.entries(gameState.teamLeaders).map(([id, data]) => (
-            <div key={id} className="p-4 border rounded">
-              <h3 className="font-bold">{data.name}의 팀</h3>
-              <p>남은 포인트: {data.points}</p>
-              <p>팀원: {data.team.join(', ') || '없음'}</p>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+            {Object.entries(gameState.teamLeaders).map(([id, data]) => (
+              <div key={id} className="p-4 border rounded">
+                <h3 className="font-bold">{data.name}의 팀</h3>
+                <p>남은 포인트: {data.points}</p>
+                <p>팀원: {data.team.join(', ') || '없음'}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-4">
+            <div className="bg-gray-100 p-4 rounded">
+              <h3 className="font-bold mb-2">경매 현황</h3>
+              <p>남은 물품: {gameState.remainingItemsCount} / {gameState.totalItems}</p>
             </div>
-          ))}
-        </div>
+            
+            {gameState.completedItems?.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-bold mb-2">경매 완료 목록</h3>
+                <div className="space-y-2">
+                  {gameState.completedItems.map((item, index) => (
+                    <div key={index} className="bg-white p-3 rounded border">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">{item.item}</span>
+                        <span className="text-sm text-gray-600">
+                          {item.winner} - {item.amount} 포인트
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {new Date(item.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {role === 'host' && (
         <div className="space-y-4">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="flex-1 p-2 border rounded"
-              placeholder="경매할 선수 이름"
-              value={currentPlayer}
-              onChange={(e) => setCurrentPlayer(e.target.value)}
-            />
-            <button
-              className="bg-blue-500 text-white px-4 rounded hover:bg-blue-600"
-              onClick={startAuction}
-              disabled={gameState?.currentAuction}
-            >
-              경매 시작
-            </button>
-          </div>
+          <button
+            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+            onClick={startAuction}
+            disabled={gameState?.currentAuction}
+          >
+            다음 경매 시작
+          </button>
         </div>
       )}
 

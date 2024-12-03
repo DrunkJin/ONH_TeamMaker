@@ -26,13 +26,37 @@ const games = new Map();
 
 // 게임 룸 관리
 class GameRoom {
-    constructor(hostId, initialPoints = 1000) {
+    constructor(hostId, initialPoints = 1000, items = []) {
         this.hostId = hostId;        // 사회자 ID
         this.teamLeaders = {};       // 팀장 정보
         this.currentAuction = null;  // 현재 경매 정보
         this.players = new Set();    // 참가자 목록
         this.status = 'waiting';     // 게임 상태 (waiting, playing, finished)
         this.initialPoints = initialPoints; // 팀장 초기 포인트
+        this.items = items;          // 경매 물품 목록
+        this.remainingItems = [...items];  // 남은 물품 목록
+        this.completedItems = [];    // 경매 완료된 물품 목록
+    }
+
+    // 랜덤하게 다음 경매 물품 선택
+    getNextItem() {
+        if (this.remainingItems.length === 0) {
+            return null;
+        }
+        const randomIndex = Math.floor(Math.random() * this.remainingItems.length);
+        const selectedItem = this.remainingItems[randomIndex];
+        this.remainingItems.splice(randomIndex, 1);  // 선택된 물품 제거
+        return selectedItem;
+    }
+
+    // 경매 완료 물품 추가
+    addCompletedItem(item, winner, amount) {
+        this.completedItems.push({
+            item,
+            winner,
+            amount,
+            timestamp: new Date()
+        });
     }
 }
 
@@ -57,7 +81,10 @@ function getGameState(game) {
             playerName: game.currentAuction.playerName,
             currentBid: game.currentAuction.currentBid,
             currentBidder: game.currentAuction.currentBidder
-        } : null
+        } : null,
+        remainingItemsCount: game.remainingItems.length,
+        completedItems: game.completedItems,
+        totalItems: game.items.length
     };
 }
 
@@ -69,6 +96,13 @@ function finalizeAuction(game, roomId, autoFinalized) {
     const winner = game.teamLeaders[game.currentAuction.currentBidder];
     winner.points -= game.currentAuction.currentBid;
     winner.team.push(game.currentAuction.playerName);
+
+    // 완료된 경매 기록 추가
+    game.addCompletedItem(
+        game.currentAuction.playerName,
+        winner.name,
+        game.currentAuction.currentBid
+    );
 
     io.to(roomId).emit('auction_finalized', {
         player: game.currentAuction.playerName,
@@ -85,9 +119,9 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // 방 생성 (사회자)
-    socket.on('create_room', ({ initialPoints = 1000 }) => {
+    socket.on('create_room', ({ initialPoints = 1000, items = [] }) => {
         const roomId = generateRoomId();
-        games.set(roomId, new GameRoom(socket.id, initialPoints));
+        games.set(roomId, new GameRoom(socket.id, initialPoints, items));
         socket.join(roomId);
         socket.emit('room_created', { roomId });
     });
@@ -104,7 +138,7 @@ io.on('connection', (socket) => {
         if (role === 'teamLeader') {
             game.teamLeaders[socket.id] = {
                 name: name,
-                points: game.initialPoints,  // 설정된 초기 포인트 사용
+                points: game.initialPoints,
                 team: []
             };
         }
@@ -114,24 +148,29 @@ io.on('connection', (socket) => {
     });
 
     // 경매 시작 (사회자)
-    socket.on('start_auction', ({ roomId, playerName }) => {
+    socket.on('start_auction', ({ roomId }) => {
         const game = games.get(roomId);
         if (!game || game.hostId !== socket.id) return;
+
+        const nextItem = game.getNextItem();
+        if (!nextItem) {
+            socket.emit('error', { message: '더 이상 경매할 물품이 없습니다.' });
+            return;
+        }
 
         if (game.currentAuction) {
             clearInterval(game.currentAuction.timerInterval);
         }
 
         game.currentAuction = {
-            playerName,
+            playerName: nextItem,
             currentBid: 0,
             currentBidder: null,
             status: 'active',
-            timer: 30,
+            timer: 20,  // 초기 20초
             timerInterval: null
         };
 
-        // 30초 타이머 시작
         game.currentAuction.timerInterval = setInterval(() => {
             game.currentAuction.timer--;
             
@@ -155,7 +194,7 @@ io.on('connection', (socket) => {
         }, 1000);
 
         io.to(roomId).emit('auction_started', {
-            playerName,
+            playerName: nextItem,
             currentBid: 0
         });
         io.to(roomId).emit('game_state_update', getGameState(game));
@@ -183,8 +222,10 @@ io.on('connection', (socket) => {
         game.currentAuction.currentBid = amount;
         game.currentAuction.currentBidder = socket.id;
         
-        // 시간 추가 (최대 30초)
-        game.currentAuction.timer = Math.min(game.currentAuction.timer + 10, 30);
+        // 남은 시간이 5초 이하일 때만 5초로 연장
+        if (game.currentAuction.timer <= 5) {
+            game.currentAuction.timer = 5;
+        }
         
         io.to(roomId).emit('bid_update', {
             amount,
