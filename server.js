@@ -26,12 +26,13 @@ const games = new Map();
 
 // 게임 룸 관리
 class GameRoom {
-    constructor(hostId) {
+    constructor(hostId, initialPoints = 1000) {
         this.hostId = hostId;        // 사회자 ID
         this.teamLeaders = {};       // 팀장 정보
         this.currentAuction = null;  // 현재 경매 정보
         this.players = new Set();    // 참가자 목록
         this.status = 'waiting';     // 게임 상태 (waiting, playing, finished)
+        this.initialPoints = initialPoints; // 팀장 초기 포인트
     }
 }
 
@@ -84,9 +85,9 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // 방 생성 (사회자)
-    socket.on('create_room', () => {
+    socket.on('create_room', ({ initialPoints = 1000 }) => {
         const roomId = generateRoomId();
-        games.set(roomId, new GameRoom(socket.id));
+        games.set(roomId, new GameRoom(socket.id, initialPoints));
         socket.join(roomId);
         socket.emit('room_created', { roomId });
     });
@@ -103,7 +104,7 @@ io.on('connection', (socket) => {
         if (role === 'teamLeader') {
             game.teamLeaders[socket.id] = {
                 name: name,
-                points: 1000,  // 초기 포인트
+                points: game.initialPoints,  // 설정된 초기 포인트 사용
                 team: []
             };
         }
@@ -166,6 +167,14 @@ io.on('connection', (socket) => {
         if (!game || !game.currentAuction || !game.teamLeaders[socket.id]) return;
 
         const teamLeader = game.teamLeaders[socket.id];
+        
+        // 입찰액이 10의 배수가 아닌 경우
+        if (amount % 10 !== 0) {
+            socket.emit('error', { message: '입찰 금액은 10의 배수여야 합니다.' });
+            return;
+        }
+
+        // 입찰액이 현재 최고 입찰액 이하이거나 보유 포인트보다 많은 경우
         if (amount <= game.currentAuction.currentBid || amount > teamLeader.points) {
             socket.emit('error', { message: '유효하지 않은 입찰입니다.' });
             return;
@@ -173,6 +182,9 @@ io.on('connection', (socket) => {
 
         game.currentAuction.currentBid = amount;
         game.currentAuction.currentBidder = socket.id;
+        
+        // 시간 추가 (최대 30초)
+        game.currentAuction.timer = Math.min(game.currentAuction.timer + 10, 30);
         
         io.to(roomId).emit('bid_update', {
             amount,

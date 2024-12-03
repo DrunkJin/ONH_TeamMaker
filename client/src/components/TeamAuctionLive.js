@@ -16,6 +16,7 @@ const TeamAuctionLive = () => {
   const [currentPlayer, setCurrentPlayer] = useState('');
   const [bidAmount, setBidAmount] = useState('');
   const [timeLeft, setTimeLeft] = useState(null);
+  const [initialPoints, setInitialPoints] = useState(1000); // 초기 포인트 설정
 
   useEffect(() => {
     socket.on('room_created', ({ roomId }) => {
@@ -77,8 +78,12 @@ const TeamAuctionLive = () => {
       setAlert({ type: 'error', message: '이름을 입력해주세요.' });
       return;
     }
+    if (initialPoints < 100) {
+      setAlert({ type: 'error', message: '초기 포인트는 최소 100점 이상이어야 합니다.' });
+      return;
+    }
     setRole('host');
-    socket.emit('create_room');
+    socket.emit('create_room', { initialPoints });
   };
 
   const joinRoom = () => {
@@ -104,7 +109,14 @@ const TeamAuctionLive = () => {
       setAlert({ type: 'error', message: '유효한 입찰 금액을 입력해주세요.' });
       return;
     }
-    socket.emit('place_bid', { roomId, amount: parseInt(bidAmount) });
+
+    const amount = parseInt(bidAmount);
+    if (amount % 10 !== 0) {
+      setAlert({ type: 'error', message: '입찰 금액은 10의 배수여야 합니다.' });
+      return;
+    }
+
+    socket.emit('place_bid', { roomId, amount });
     setBidAmount('');
   };
 
@@ -138,12 +150,23 @@ const TeamAuctionLive = () => {
         />
 
         <div className="space-y-2">
-          <button
-            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-            onClick={createRoom}
-          >
-            방 만들기 (사회자)
-          </button>
+          <div className="space-y-2">
+            <input
+              type="number"
+              className="w-full p-2 border rounded"
+              placeholder="팀장 초기 포인트"
+              value={initialPoints}
+              onChange={(e) => setInitialPoints(parseInt(e.target.value) || 0)}
+              min="100"
+              step="100"
+            />
+            <button
+              className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+              onClick={createRoom}
+            >
+              방 만들기 (사회자)
+            </button>
+          </div>
           
           <div className="flex gap-2">
             <input
@@ -242,9 +265,11 @@ const TeamAuctionLive = () => {
               <input
                 type="number"
                 className="flex-1 p-2 border rounded"
-                placeholder="입찰 금액"
+                placeholder="입찰 금액 (10단위)"
                 value={bidAmount}
                 onChange={(e) => setBidAmount(e.target.value)}
+                step="10"
+                min={gameState.currentAuction.currentBid + 10}
               />
               <button
                 className="bg-green-500 text-white px-4 rounded hover:bg-green-600"
