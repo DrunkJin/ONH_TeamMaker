@@ -4,9 +4,10 @@
   "description": "Team Auction System",
   "main": "server.js",
   "scripts": {
+    "setup": "npm install && cd client && npm install",
+    "build": "cd client && npm run build",
     "start": "node server.js",
-    "build": "cd client && npm install && npm run build",
-    "postinstall": "npm run build"
+    "postinstall": "npm run setup && npm run build"
   },
   "dependencies": {
     "express": "^4.18.2",
@@ -14,6 +15,6 @@
     "cors": "^2.8.5"
   },
   "engines": {
-    "node": "16.x"
+    "node": ">=16.x"
   }
 }
