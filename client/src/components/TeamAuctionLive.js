@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import { Alert, AlertTitle } from '@/components/ui/alert';
 
-// 개발/배포 환경에 따른 서버 URL 설정
-const SERVER_URL = process.env.REACT_APP_SERVER_URL || 'http://localhost:3001';
-const socket = io(SERVER_URL);
+// Railway 배포용 소켓 연결 설정
+const socket = io(window.location.origin, {
+  transports: ['websocket', 'polling'],
+  secure: true
+});
 
 const TeamAuctionLive = () => {
   const [role, setRole] = useState(null); // 'host', 'teamLeader', 'spectator'
@@ -17,7 +18,6 @@ const TeamAuctionLive = () => {
   const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
-    // 소켓 이벤트 리스너 설정
     socket.on('room_created', ({ roomId }) => {
       setRoomId(roomId);
       setAlert({ type: 'success', message: `방이 생성되었습니다. 방 코드: ${roomId}` });
@@ -32,7 +32,7 @@ const TeamAuctionLive = () => {
 
     socket.on('auction_started', (auction) => {
       setAlert({ type: 'info', message: `${auction.playerName} 선수의 경매가 시작되었습니다!` });
-      setTimeLeft(30); // 30초 타이머 시작
+      setTimeLeft(30);
     });
 
     socket.on('bid_update', ({ amount, bidder }) => {
@@ -60,7 +60,6 @@ const TeamAuctionLive = () => {
       setAlert({ type: 'error', message });
     });
 
-    // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
       socket.off('room_created');
       socket.off('game_state_update');
@@ -73,7 +72,6 @@ const TeamAuctionLive = () => {
     };
   }, []);
 
-  // 방 생성 (사회자)
   const createRoom = () => {
     if (!name) {
       setAlert({ type: 'error', message: '이름을 입력해주세요.' });
@@ -83,7 +81,6 @@ const TeamAuctionLive = () => {
     socket.emit('create_room');
   };
 
-  // 방 참가 (팀장)
   const joinRoom = () => {
     if (!name || !roomId) {
       setAlert({ type: 'error', message: '이름과 방 코드를 입력해주세요.' });
@@ -93,7 +90,6 @@ const TeamAuctionLive = () => {
     setRole('teamLeader');
   };
 
-  // 경매 시작
   const startAuction = () => {
     if (!currentPlayer) {
       setAlert({ type: 'error', message: '선수 이름을 입력해주세요.' });
@@ -103,7 +99,6 @@ const TeamAuctionLive = () => {
     setCurrentPlayer('');
   };
 
-  // 입찰
   const placeBid = () => {
     if (!bidAmount || isNaN(bidAmount)) {
       setAlert({ type: 'error', message: '유효한 입찰 금액을 입력해주세요.' });
@@ -113,21 +108,25 @@ const TeamAuctionLive = () => {
     setBidAmount('');
   };
 
-  // 낙찰 처리
   const finalizeAuction = () => {
     socket.emit('finalize_auction', { roomId });
   };
 
-  // 초기 화면 (역할 선택)
   if (!role) {
     return (
       <div className="max-w-md mx-auto p-4 space-y-4">
         <h1 className="text-2xl font-bold text-center">팀 경매 시스템</h1>
         
         {alert && (
-          <Alert className="mb-4" variant={alert.type === 'error' ? 'destructive' : 'default'}>
-            <AlertTitle>{alert.message}</AlertTitle>
-          </Alert>
+          <div className={`mb-4 p-4 rounded ${
+            alert.type === 'error' 
+              ? 'bg-red-100 text-red-700' 
+              : alert.type === 'success'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-blue-100 text-blue-700'
+          }`}>
+            {alert.message}
+          </div>
         )}
 
         <input
@@ -166,13 +165,18 @@ const TeamAuctionLive = () => {
     );
   }
 
-  // 메인 게임 화면
   return (
     <div className="max-w-4xl mx-auto p-4">
       {alert && (
-        <Alert className="mb-4" variant={alert.type === 'error' ? 'destructive' : 'default'}>
-          <AlertTitle>{alert.message}</AlertTitle>
-        </Alert>
+        <div className={`mb-4 p-4 rounded ${
+          alert.type === 'error' 
+            ? 'bg-red-100 text-red-700' 
+            : alert.type === 'success'
+            ? 'bg-green-100 text-green-700'
+            : 'bg-blue-100 text-blue-700'
+        }`}>
+          {alert.message}
+        </div>
       )}
 
       <div className="mb-4">
@@ -182,9 +186,9 @@ const TeamAuctionLive = () => {
 
       {gameState && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-          {Object.entries(gameState.teamLeaders).map(([leaderName, data]) => (
-            <div key={leaderName} className="p-4 border rounded">
-              <h3 className="font-bold">{leaderName}의 팀</h3>
+          {Object.entries(gameState.teamLeaders).map(([id, data]) => (
+            <div key={id} className="p-4 border rounded">
+              <h3 className="font-bold">{data.name}의 팀</h3>
               <p>남은 포인트: {data.points}</p>
               <p>팀원: {data.team.join(', ') || '없음'}</p>
             </div>
