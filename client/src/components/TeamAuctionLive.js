@@ -17,6 +17,7 @@ const TeamAuctionLive = () => {
   const [initialPoints, setInitialPoints] = useState(1000);
   const [auctionItems, setAuctionItems] = useState(''); // 경매 물품 목록
   const [bidAmount, setBidAmount] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);  // 익명 경매 여부
 
   useEffect(() => {
     socket.on('room_created', ({ roomId }) => {
@@ -83,18 +84,18 @@ const TeamAuctionLive = () => {
       return;
     }
     if (!auctionItems.trim()) {
-      setAlert({ type: 'error', message: '경매 물품을 입력해주세요.' });
+      setAlert({ type: 'error', message: '경매 대상을 입력해주세요.' });
       return;
     }
     
     const itemsList = auctionItems.split(',').map(item => item.trim()).filter(item => item);
     if (itemsList.length === 0) {
-      setAlert({ type: 'error', message: '최소 한 개 이상의 경매 물품이 필요합니다.' });
+      setAlert({ type: 'error', message: '최소 한 개 이상의 경매 대상이 필요합니다.' });
       return;
     }
 
     setRole('host');
-    socket.emit('create_room', { initialPoints, items: itemsList });
+    socket.emit('create_room', { initialPoints, items: itemsList, isAnonymous });
   };
 
   const joinRoom = () => {
@@ -133,7 +134,7 @@ const TeamAuctionLive = () => {
   if (!role) {
     return (
       <div className="max-w-md mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold text-center">팀 경매 시스템</h1>
+        <h1 className="text-2xl font-bold text-center">오내하 경매 시스템</h1>
         
         {alert && (
           <div className={`mb-4 p-4 rounded ${
@@ -166,6 +167,15 @@ const TeamAuctionLive = () => {
               min="100"
               step="100"
             />
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="checkbox"
+                id="anonymous"
+                checked={isAnonymous}
+                onChange={(e) => setIsAnonymous(e.target.checked)}
+              />
+              <label htmlFor="anonymous">익명 경매로 진행</label>
+            </div>
             <textarea
               className="w-full p-2 border rounded"
               placeholder="경매 물품 목록 (쉼표로 구분)"
@@ -200,7 +210,7 @@ const TeamAuctionLive = () => {
       </div>
     );
   }
-  // return 문 안의 메인 게임 화면 부분을 수정
+
   return (
     <div className="max-w-7xl mx-auto p-4 flex gap-4">
       {/* 메인 컨텐츠 영역 */}
@@ -261,7 +271,7 @@ const TeamAuctionLive = () => {
             
             <p className="text-lg">
               현재 최고 입찰: {gameState.currentAuction.currentBid} 포인트
-              {gameState.currentAuction.currentBidder && (
+              {gameState.currentAuction.currentBidder && !gameState.isAnonymous && (
                 ` (입찰자: ${gameState.teamLeaders[gameState.currentAuction.currentBidder]?.name})`
               )}
             </p>
@@ -303,25 +313,60 @@ const TeamAuctionLive = () => {
         <div className="w-80 flex-shrink-0">
           <div className="sticky top-4">
             <div className="bg-white p-4 rounded border">
-              <h3 className="text-lg font-bold mb-4">경매 인원 현황</h3>
+              <h3 className="text-lg font-bold mb-4">경매 현황</h3>
               
               {/* 전체 현황 */}
               <div className="mb-4 p-3 bg-gray-50 rounded">
-                <p>전체 경매 인원: {gameState.totalItems}개</p>
-                <p>남은 경매 인원: {gameState.remainingItemsCount}개</p>
+                <p>전체 경매: {gameState.totalItems}개</p>
+                <p>남은 경매: {gameState.remainingItemsCount}개</p>
+                {gameState.isAnonymous && <p className="text-sm text-gray-600">익명 경매 진행 중</p>}
               </div>
+
+              {/* 남은 경매 목록 */}
+              <div className="mb-4">
+                <h4 className="font-medium text-gray-700 mb-2">남은 경매 물품</h4>
+                <div className="space-y-2">
+                  {gameState.remainingItems.map((item, index) => (
+                    <div key={`remaining-${index}`} className="p-2 bg-gray-50 rounded text-sm">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 실패한 경매 목록 */}
+              {gameState.failedItems.length > 0 && (
+                <div className="mb-4">
+                  <h4 className="font-medium text-gray-700 mb-2">유찰된 경매</h4>
+                  <div className="space-y-2">
+                    {gameState.failedItems.map((item, index) => (
+                      <div key={`failed-${index}`} className="p-2 bg-red-50 rounded text-sm">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 완료된 경매 목록 */}
               <div className="space-y-2">
                 <h4 className="font-medium text-gray-700">완료된 경매</h4>
                 {gameState.completedItems.map((item, index) => (
-                  <div key={index} className="p-2 bg-gray-50 rounded text-sm">
+                  <div key={`completed-${index}`} className="p-2 bg-green-50 rounded text-sm">
                     <div className="font-medium">{item.item}</div>
                     <div className="text-gray-600">
                       {item.winner} - {item.amount} 포인트
+                      </div>
+                    <div className="text-xs text-gray-500">
+                      {new Date(item.timestamp).toLocaleString()}
                     </div>
                   </div>
                 ))}
+                {gameState.completedItems.length === 0 && (
+                  <div className="text-sm text-gray-500 p-2">
+                    아직 완료된 경매가 없습니다.
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -26,26 +26,34 @@ const games = new Map();
 
 // 게임 룸 관리
 class GameRoom {
-    constructor(hostId, initialPoints = 1000, items = []) {
+    constructor(hostId, initialPoints = 1000, items = [], isAnonymous = false) {
         this.hostId = hostId;        // 사회자 ID
         this.teamLeaders = {};       // 팀장 정보
         this.currentAuction = null;  // 현재 경매 정보
         this.players = new Set();    // 참가자 목록
-        this.status = 'waiting';     // 게임 상태 (waiting, playing, finished)
+        this.status = 'waiting';     // 게임 상태
         this.initialPoints = initialPoints; // 팀장 초기 포인트
         this.items = items;          // 경매 물품 목록
         this.remainingItems = [...items];  // 남은 물품 목록
         this.completedItems = [];    // 경매 완료된 물품 목록
+        this.failedItems = [];       // 실패한 경매 물품
+        this.isAnonymous = isAnonymous;  // 익명 경매 여부
     }
 
     // 랜덤하게 다음 경매 물품 선택
     getNextItem() {
         if (this.remainingItems.length === 0) {
-            return null;
+            // 실패한 아이템이 있으면 다시 남은 아이템으로 추가
+            if (this.failedItems.length > 0) {
+                this.remainingItems.push(...this.failedItems);
+                this.failedItems = [];
+            } else {
+                return null;
+            }
         }
         const randomIndex = Math.floor(Math.random() * this.remainingItems.length);
         const selectedItem = this.remainingItems[randomIndex];
-        this.remainingItems.splice(randomIndex, 1);  // 선택된 물품 제거
+        this.remainingItems.splice(randomIndex, 1);
         return selectedItem;
     }
 
@@ -57,6 +65,11 @@ class GameRoom {
             amount,
             timestamp: new Date()
         });
+    }
+
+    // 실패한 아이템 추가
+    addFailedItem(item) {
+        this.failedItems.push(item);
     }
 }
 
@@ -80,11 +93,14 @@ function getGameState(game) {
         currentAuction: game.currentAuction ? {
             playerName: game.currentAuction.playerName,
             currentBid: game.currentAuction.currentBid,
-            currentBidder: game.currentAuction.currentBidder
+            currentBidder: game.isAnonymous ? null : game.currentAuction.currentBidder
         } : null,
         remainingItemsCount: game.remainingItems.length,
         completedItems: game.completedItems,
-        totalItems: game.items.length
+        failedItems: game.failedItems,
+        remainingItems: game.remainingItems,
+        totalItems: game.items.length,
+        isAnonymous: game.isAnonymous
     };
 }
 
@@ -119,9 +135,9 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // 방 생성 (사회자)
-    socket.on('create_room', ({ initialPoints = 1000, items = [] }) => {
+    socket.on('create_room', ({ initialPoints = 1000, items = [], isAnonymous = false }) => {
         const roomId = generateRoomId();
-        games.set(roomId, new GameRoom(socket.id, initialPoints, items));
+        games.set(roomId, new GameRoom(socket.id, initialPoints, items, isAnonymous));
         socket.join(roomId);
         socket.emit('room_created', { roomId });
     });
@@ -167,7 +183,7 @@ io.on('connection', (socket) => {
             currentBid: 0,
             currentBidder: null,
             status: 'active',
-            timer: 20,  // 초기 20초
+            timer: 20,
             timerInterval: null
         };
 
@@ -183,6 +199,8 @@ io.on('connection', (socket) => {
                 if (game.currentAuction.currentBidder) {
                     finalizeAuction(game, roomId, true);
                 } else {
+                    // 실패한 경매 처리
+                    game.addFailedItem(game.currentAuction.playerName);
                     io.to(roomId).emit('auction_cancelled', {
                         player: game.currentAuction.playerName,
                         reason: '입찰자가 없어 경매가 취소되었습니다.'
@@ -229,7 +247,7 @@ io.on('connection', (socket) => {
         
         io.to(roomId).emit('bid_update', {
             amount,
-            bidder: teamLeader.name
+            bidder: game.isAnonymous ? '익명' : teamLeader.name
         });
         io.to(roomId).emit('game_state_update', getGameState(game));
     });
